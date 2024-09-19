@@ -1,0 +1,534 @@
+---
+title: "Homework8"
+author: "Lizhuo Zhou 20307100132"
+date: "05/21/2024"
+output:
+  pdf_document: default
+  word_document: default
+---
+
+## Problem 1
+
+```{r}
+glass <- read.table("glass.dat")
+Y <- glass$RI; X <- glass$Al
+Y <- Y[order(X)]; X <- X[order(X)]
+```
+
+### Regressogram
+
+For	simplicity,	we	order	X	and	Y.
+
+```{r}
+#Fit Model
+Y <- Y[order(X)]
+X <- X[order(X)]
+
+```
+
+We use the following formula to calculate the estimated risk.
+
+$\hat{R_{h}}=\dfrac{1}{n}\sum_{i=1}^{n}\left(\dfrac{Y_{i}-\hat{r_{n}(x_{n})}}{1-L_{ii}}\right)$
+
+Note that, $L_{ii}$ in the formula above will	change	when our bandwidth of	bins changes.	We divide	the	interval $[a,b]=[min(X_{i}),max(X_{i})]$ into several equal spaced	bins.	For	each	space,	we	construct	$L_{ii}$ and	
+calculate	the	estimated	risk.
+
+```{r}
+a <- min(X); b <- max(X); Y <- matrix(Y, ncol = 1)
+n_try <- 2:15
+record_risk <- c()
+for (n in n_try){
+  n_bins <- n
+ cutoff <- seq(from = a, to = b, length.out = (n_bins+1))
+ cutoff[1] <- cutoff[1] - 0.00001
+ bins <- cut(X, cutoff)
+ levels(bins) <- 1:n_bins
+ L_matrix <- matrix(0, nrow = length(Y), ncol = length(Y))
+ for (i in 1:length(Y)){
+ L_matrix[i,bins == bins[i]] <- 1/sum(bins == bins[i])
+ }
+ r_hat <- L_matrix %*% Y
+ diag_L <- diag(L_matrix)
+ nominator_risk <- Y - r_hat
+ denominator_risk <- 1 - diag_L
+ risk <- (sum((nominator_risk / denominator_risk)^2, na.rm = T)) / (length(Y))
+ record_risk <- c(record_risk, risk)
+}
+n_bins <- n_try[which.min(record_risk)]
+cutoff <- seq(from = a, to = b, length.out = (n_bins+1))
+cutoff[1] <- cutoff[1] - 0.00001
+bins <- cut(X, cutoff)
+levels(bins) <- 1:n_bins
+L_matrix <- matrix(0, nrow = length(Y), ncol = length(Y))
+for (i in 1:length(Y)){
+ L_matrix[i,bins == bins[i]] <- 1/sum(bins == bins[i])
+}
+r_hat <- L_matrix %*% Y
+
+```
+
+We can estimate	the	variance by	using	the	below	formula.
+
+$\hat{\sigma^2}=\dfrac{\sum_{i=1}^{n}(Y_{i}-\hat{r(X_{i})})^2}{n-2v+\widetilde{v}}$
+
+
+```{r}
+#Estimate Variance
+v <- sum(diag(L_matrix))
+v_tilde <- sum(diag(t(L_matrix) %*% L_matrix))
+sighat <- (sum((Y - r_hat)^2)) / (length(Y) - 2 * v + v_tilde)
+
+```
+
+We	use	(5.100)	to	find	c. Here	we are	only	able	to	use	numerical	methodology	to integrate $\kappa_{o} =\int_{a}^{b}||T^{`}(x)||$.	In	this	way, we	will	only	get	$\kappa_{o} = 0$ because	$T^{`}_{i}(x)= 0$. 
+
+Therefore,	we	need	to	solve $2(1-\phi(c))=0.05$
+
+
+```{r}
+
+c <- qnorm(0.975)
+upp_bond <- c()
+low_bond <- c()
+for (i in 1:length(Y)){
+ upp_bond[i] <- r_hat[i,] + c * sqrt(sighat) * sqrt(sum((L_matrix[i,])
+^2))
+ low_bond[i] <- r_hat[i,] - c * sqrt(sighat) * sqrt(sum((L_matrix[i,])
+^2))
+}
+plot(X, Y, main='Regressogram')
+lines(X, r_hat, type = "s", lwd =2, col = "blue")
+lines(X, upp_bond, type = "s", lty =2, lwd =2, col = "red")
+lines(X, low_bond, type = "s", lty =2, lwd =2, col = "red")
+
+
+```
+
+#Kernel(Nadaraya-Watson)
+
+```{r}
+#Fit Model
+# dis stands for l1-norm; h is the tuning parameter
+ker <- function(dis, h){
+ return (1/(sqrt(2*pi)*h) * exp(-dis^2/(2*h^2)) )
+}
+ker <- Vectorize(ker)
+
+```
+
+Similarly, use	the	given	formula	to	choose	h.
+
+```{r}
+h_all <- seq(from = 0.003, to = 0.3, length.out = 2000)
+record_risk <- c()
+for (h in h_all){
+  L_matrix <- matrix(0, nrow = length(Y), ncol = length(Y))
+ for (i in 1:length(Y)){
+ dis <- X - X[i]
+ L_matrix[i,] <- ker(dis = dis, h = h)
+ L_matrix[i,] <- L_matrix[i,] / sum(L_matrix[i,])
+ }
+ r_hat <- L_matrix %*% Y
+ diag_L <- diag(L_matrix)
+ nominator_risk <- Y - r_hat
+ denominator_risk <- 1 - diag_L
+ risk <- (sum((nominator_risk / denominator_risk)^2, na.rm = T)) / (length(Y))
+ record_risk <- c(record_risk, risk)
+}
+h <- h_all[which.min(record_risk)]
+
+```
+
+Using the h, fit our model.
+
+```{r}
+
+x_grid <- seq(from = a, to = b, by = 0.001)
+y_grid <- c()
+for (k in 1:length(x_grid)){
+ x_use <- x_grid[k]
+ dis <- X - x_use
+ L_krow <- ker(dis = dis, h = h)
+ L_krow <- L_krow / sum(L_krow)
+ y_grid[k] <- sum(L_krow * Y)
+}
+
+
+```
+
+
+
+
+```{r}
+#Estimate Variance
+
+L_matrix <- matrix(0, nrow = length(Y), ncol = length(Y))
+for (i in 1:length(Y)){
+ dis <- X - X[i]
+ L_matrix[i,] <- ker(dis = dis, h = h)
+ L_matrix[i,] <- L_matrix[i,] / sum(L_matrix[i,])
+}
+r_hat <- L_matrix %*% Y
+v <- sum(diag(L_matrix))
+v_tilde <- sum(diag(t(L_matrix) %*% L_matrix))
+sighat <- (sum((Y - r_hat)^2)) / (length(Y) - 2 * v + v_tilde)
+
+
+```
+
+
+```{r}
+#Confidence Band
+#Calculate numerical derivative
+library(pracma)
+options(warning = -1)
+
+#Calculate kappa_0
+
+Tprimenorm <- function(x){
+ T_i <- c()
+ for (i in 1:length(Y)) {
+ get_l <- function(x){
+ dis <- X - x
+ l <- ker(dis = dis, h = h) / sum(ker(dis = dis, h = h))
+ return(l[i])
+ }
+ T_i[i] <- fderiv(get_l,x)
+ }
+  return(sqrt(sum(T_i^2)))
+}
+
+Tprimenorm <- Vectorize(Tprimenorm)
+int_result <- integrate(Tprimenorm,a,b)
+print(int_result)
+
+
+```
+
+
+
+```{r}
+#solve	the	related	c(5.100)
+kappa0 <- int_result$value
+obj_function <- function(c){
+ return ((2 * (1 - pnorm(c)) + (kappa0 * exp(- (c^2) /2)) / pi - 0.05)
+^2)
+}
+optimize(obj_function, c(2,3))
+c_opt <- optimize(obj_function, c(2,3))$minimum
+
+#Confidence Band
+x_grid <- seq(from = a, to = b, by = 0.001)
+y_grid <- c()
+low_grid <- c()
+upp_grid <- c()
+for (k in 1:length(x_grid)){
+ x_use <- x_grid[k]
+ dis <- X - x_use
+ L_krow <- ker(dis = dis, h = h)
+ L_krow <- L_krow / sum(L_krow)
+ y_grid[k] <- sum(L_krow * Y)
+ low_grid[k] <- sum(L_krow * Y) - c_opt * sqrt(sighat) * sqrt(sum((L_krow)^2))
+ upp_grid[k] <- sum(L_krow * Y) + c_opt * sqrt(sighat) * sqrt(sum((L_krow)^2))
+}
+plot(X, Y, main="Kernel Regression")
+lines(x_grid, y_grid, type = "s", lwd =2, col = "blue")
+lines(x_grid, low_grid, type = "s", lty =2, lwd =2, col = "orange")
+lines(x_grid, upp_grid, type = "s", lty =2, lwd =2, col = "orange")
+```
+
+#Local linear
+
+Find	bandwidth:	The	i-th	row	of	L matrix	can	be	calculated	as:	given	$x=x_{i}$, i.e.,	at	
+the	i-th	data	point.	Then	calculate	the	i-th	row	of $(X^{T}_{x}W_{x}X_{x})^{-1}X^{T}_{x}W_{x}$.
+
+```{r}
+h_all <- seq(from = 0.1, to = 0.4, by = 0.001)
+record_risk <- c()
+for (h in h_all){
+ L_matrix <- matrix(0, nrow = length(Y), ncol = length(Y))
+ for (i in 1:length(Y)){K0=13.8
+ Xx <- matrix(c(rep(1, length(Y)), X - X[i]), ncol = 2, byrow = F)
+ dis <- X[i] - X
+ Wx <- diag(ker(dis = dis, h = h), nrow = length(Y))
+ hat_matrix <- solve(t(Xx) %*% Wx %*% Xx) %*% t(Xx) %*% Wx
+ L_matrix[i,] <- hat_matrix[1,]
+ }
+ r_hat <- L_matrix %*% Y
+ diag_L <- diag(L_matrix)
+ nominator_risk <- Y - r_hat
+ denominator_risk <- 1 - diag_L
+ risk <- (sum((nominator_risk / denominator_risk)^2, na.rm = T)) / (length(Y))
+ record_risk <- c(record_risk, risk)
+}
+
+h <- h_all[which.min(record_risk)]
+
+#Fitted Model
+x_grid <- seq(from = a, to = b, by = 0.001)
+y_grid <- c()
+for (k in 1:length(x_grid)){
+ Xx <- matrix(c(rep(1, length(Y)), X - x_grid[k]), ncol = 2, byrow = F
+)
+ dis <- X - x_grid[k]
+ Wx <- diag(ker(dis = dis, h = h), nrow = length(Y))
+ hat_matrix <- solve(t(Xx) %*% Wx %*% Xx) %*% t(Xx) %*% Wx
+ y_grid[k] <- hat_matrix[1,] %*% Y
+}
+
+```
+
+```{r}
+# Estimate Variance
+
+L_matrix <- matrix(0, nrow = length(Y), ncol = length(Y))
+for (i in 1:length(Y)){
+ Xx <- matrix(c(rep(1, length(Y)), X - X[i]), ncol = 2, byrow = F)
+ dis <- X[i] - X
+ Wx <- diag(ker(dis = dis, h = h), nrow = length(Y))
+ hat_matrix <- solve(t(Xx) %*% Wx %*% Xx) %*% t(Xx) %*% Wx
+ L_matrix[i,] <- hat_matrix[1,]
+}
+r_hat <- L_matrix %*% Y
+v <- sum(diag(L_matrix))
+v_tilde <- sum(diag(t(L_matrix) %*% L_matrix))
+sighat <- (sum((Y - r_hat)^2)) / (length(Y) - 2 * v + v_tilde)
+
+```
+
+```{r}
+#Confidence Band
+Tprimenorm <- function(x){
+ T_i <- c()
+ for (i in 1:length(Y)) {
+ get_l <- function(x){
+ dis <- X - x
+ Wx <- diag(ker(dis = dis, h = h), nrow=length(Y), ncol=length(Y))
+ Xx <- matrix(c(rep(1, length(Y)), dis), ncol = 2, byrow = F)
+ l = (solve(t(Xx)%*%Wx%*%Xx)%*%t(Xx)%*%Wx)[1,]
+ l = l/sqrt(sum(l^2))
+ return(l[i])
+ }
+ T_i[i] <- fderiv(get_l,x)
+ }
+ return(sqrt(sum(T_i^2)))
+ }
+
+Tprimenorm <- Vectorize(Tprimenorm)
+int_result <- integrate(Tprimenorm,a,b)
+
+```
+
+Similarly, calculate c by optimize function.
+
+```{r}
+kappa0 <- int_result$value
+obj_function <- function(c){
+ return ((2 * (1 - pnorm(c)) + (kappa0 * exp(- (c^2) /2)) / pi - 0.05)
+^2)
+}
+optimize(obj_function, c(2.7,3.2))
+
+c_opt <- optimize(obj_function, c(2.7,3.2))$minimum
+
+#Final Confidence Band
+
+x_grid <- seq(from = a, to = b, by = 0.001)
+y_grid <- c()
+y_upp <- c()
+y_low <- c()
+for (k in 1:length(x_grid)){
+ Xx <- matrix(c(rep(1, length(Y)), X - x_grid[k]), ncol = 2, byrow = F
+)
+ dis <- X - x_grid[k]
+ Wx <- diag(ker(dis = dis, h = h), nrow = length(Y))
+ hat_matrix <- solve(t(Xx) %*% Wx %*% Xx) %*% t(Xx) %*% Wx
+ y_grid[k] <- hat_matrix[1,] %*% Y
+ y_upp[k] <- hat_matrix[1,] %*% Y + c_opt * sqrt(sighat) * sqrt(sum((hat_matrix[1,])^2))
+ y_low[k] <- hat_matrix[1,] %*% Y - c_opt * sqrt(sighat) * sqrt(sum((hat_matrix[1,])^2))
+}
+plot(X, Y, main="Local Linear Regression")
+lines(x_grid, y_grid, type = "s", lwd =2, col = "purple")
+lines(x_grid, y_upp, type = "s", lty =2, lwd =2, col = "orange")
+lines(x_grid, y_low, type = "s", lty =2, lwd =2, col = "orange")
+```
+
+# Spline
+
+Define	matrix B and $\Omega$	and	eventually	solve for	the	 optimal	bandwidth	h.
+
+```{r}
+#Fit Model
+
+get_pos <- function(x){ 
+ return(max(0, x)) 
+}
+get_pos <- Vectorize(get_pos)
+n <- length(Y)
+N <- length(Y) + 4
+B <- matrix(0,length(Y),N)
+B[,1:4] <- cbind(1,X,X^2,X^3)
+for (i in 1:length(Y)) { 
+ ksai <- X[i] 
+ B[,i+4] <- get_pos((X-ksai)^3) 
+}
+
+xlist <- seq(a, b, length.out=500)
+Bx <- matrix(0,500,N)
+Bx[,1:4] <- cbind(1,xlist,xlist^2,xlist^3) 
+for (i in 1:n) { 
+ ksai <- X[i] 
+ Bx[,i+4] <- get_pos((xlist-ksai)^3) 
+}
+
+get_B <- function(x){
+ Bx <- matrix(0,length(x),N)
+ Bx[,1:4]=cbind(1, x, x^2, x^3) 
+ for (i in 1:n) { 
+ ksai <- X[i] 
+ Bx[,i+4]=get_pos((x-ksai)^3) 
+ }
+ return(Bx)
+}
+
+get_L_s <- function(lam){
+ omega <- matrix(0,N,N) 
+ double_4 <- function(z){return(36*z^2)}
+ double_34 <- function(z){return(12*z)}
+ omega[3,3] <- 4*(b - a)
+ omega[4,4] = integrate(double_4,a,b)$value
+ omega[3,4] = integrate(double_34,a,b)$value
+ omega[4,3] = omega[3,4]
+ 
+ for(i in 5:N){
+ ksaii = X[i-4]
+ double_3i = Vectorize(function(z){
+ return(max(6*(z-ksaii),0)*2) 
+ })
+ double_4i = Vectorize(function(z){
+ return(max(6*(z-ksaii),0)*6*z) 
+ })
+ omega[3,i] = integrate(double_3i,a,b)$value
+ omega[4,i] = integrate(double_4i,a,b)$value
+ omega[i,3] = omega[3,i]
+ omega[i,4] = omega[4,i]
+ }
+ for(i in 1:length(Y)){ 
+ for(j in 1:i){ 
+ ksai1 <- X[i] 
+ ksai2 <- X[j] 
+ double <- Vectorize(function(z){ 
+ return(36*max((z-ksai1),0)*max((z-ksai2),0))
+ })
+ omega[i+4,j+4] = integrate(double,ksai1,b)$value 
+ omega[j+4,i+4] = omega[i+4,j+4]
+ }
+ }
+ 
+ beta = solve(t(B)%*%B + lam*omega + diag(rep(0.0001,N)))%*%t(B) 
+ return(beta)
+}
+
+
+```
+
+Solve for the best lambda.
+
+```{r}
+
+risk_record <- c()
+lamlist <- seq(0.01, 0.05, length.out=20)
+get_Rh <- function(L){
+ diag(L) <- 0
+ for(i in 1:length(Y)){
+ if(sum(L[i,1:length(Y)])){
+ L[i,1:length(Y)] = L[i,1:length(Y)]/sum(L[i,1:length(Y)])
+ }
+ }
+ rn <- as.vector(L%*%Y)
+ return(mean((Y-rn)^2))
+}
+for(i in 1:20){
+ risk_record[i] <- get_Rh(B%*%get_L_s(lamlist[i]))
+}
+
+lam_best <- lamlist[which.min(risk_record)]
+beta_best <- get_L_s(lam_best)
+L <- B%*%beta_best
+L_new <- Bx%*%beta_best
+y_hat <- as.vector(L_new %*% Y)
+y_hat2 <- as.vector(L %*% Y)
+
+```
+
+```{r}
+# Variance Estimation
+v <- sum(diag(L))
+v_tilde <- sum(diag(t(L) %*% L))
+sighat <- sum((Y - y_hat2)^2)/(n-2*v+v_tilde)
+sighat
+
+```
+
+
+```{r}
+#Confidence Band
+
+get_Tprime <- function(x){
+  T_p <- c()
+  for (i in 1:length(Y)) {
+    get_l <- function(x){
+      l <- get_B(x)%*%beta_best
+ li <- l[i]/sqrt(sum(l^2))
+ return(li)
+ }
+ T_p[i] <- fderiv(get_l,x)
+ }
+ return(sqrt(sum(T_p^2)))
+}
+get_Tprime <- Vectorize(get_Tprime)
+K0 <- integrate(get_Tprime,a,b)$value
+
+#Optimal c
+kappa0 <- K0
+obj_function <- function(c){
+ return ((2 * (1 - pnorm(c)) + (kappa0 * exp(- (c^2) /2)) / pi - 0.05)
+^2)
+}
+optimize(obj_function, c(2.7,3.2))
+
+c_opt <- optimize(obj_function, c(2.7,3.2))$minimum
+
+#Confidence Band
+upl= c()
+lol= c()
+for(i in 1:500){
+ l_mode <- sqrt(sum(L_new[i,1:length(Y)]^2))
+ upl[i] <- y_hat[i] + c_opt*sqrt(sighat)*l_mode
+ lol[i] <- y_hat[i] - c_opt*sqrt(sighat)*l_mode
+}
+plot(X,Y,main="Spline")
+lines(xlist[order(xlist)],y_hat[order(xlist)], lty =2, lwd =2, col='purple')
+lines(xlist[order(xlist)],upl[order(xlist)], lty =2, lwd =2, col='brown')
+lines(xlist[order(xlist)],lol[order(xlist)], lty =2, lwd =2, col='brown')
+
+```
+
+
+
+
+
+\
+\ \ Conclusion:
+\
+\ \ I have plotted a density function of N(1,4), a built-in kernel density estimator, a kernel density estimator with cross-validation to choose the optimal bandwidth; and a kernel density estimator with normal reference rule. Eventually, the comparison of the 4 curves are drawn in the same plot.
+\
+\ \ The bandwidth that the built-in function(function:density()) use is 0.6028.
+
+
+
+
+
+
+
+

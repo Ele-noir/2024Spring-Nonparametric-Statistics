@@ -1,0 +1,183 @@
+---
+title: "Homework7"
+author: "Lizhuo Zhou 20307100132"
+date: "05/14/2024"
+output:
+  pdf_document: default
+  word_document: default
+---
+
+## Problem 1
+
+```{r}
+#Generate samples from N(1,4)
+set.seed(35421)
+data<-rnorm(100,mean=1,sd=2)
+data
+```
+
+```{r}
+estden.hist <- function(x,data,h){
+  n <- length(data)
+  range <- max(data)-min(data)
+  block <- floor((x-min(data))/h)
+  p.hat <- sum(data>=min(data)+range*(block-1)*h &
+                 data<min(data)+range*block*h)/n
+  return(p.hat/h)
+}
+
+```
+
+
+```{r}
+
+band.hcv<- function(data){
+  h.candidate <- seq(from = 0.002, to = 0.7, by = 0.0001)
+  n <- length(data)
+  nh <- length(h.candidate)
+  range <- max(data)-min(data)
+  riskseq <- c()
+  for (i in 1:nh){
+    h <- h.candidate[i]
+    p.hat = c()
+    for (j in 1:n){
+      p.hat[j] = sum(data>=min(data)+range*(j-1)*h
+                     & data<min(data)+range*j*h)/n
+    }
+    
+    # Empirical risk (6.16)
+    riskseq[i] <- 2/h/(n-1)-(n+1)/h/(n-1)*sum(p.hat^2)
+    }
+  return(h.candidate[which.min(riskseq)])
+  }
+
+
+```
+
+```{r}
+
+estden.kernel <- function(x, data, h){
+  n <- length(data)
+  kernel.RBF <- function(x){exp(-(x^2)/2) / sqrt(2 * pi)}
+  return(sum(kernel.RBF((x - data)/h)) / (n*h))
+  }
+
+```
+
+
+```{r}
+band.kcv<- function(data){
+  h.candidate <- seq(from = 0.002, to = 0.7, by = 0.0001)
+  n <- length(data)
+  nh <- length(h.candidate)
+  riskseq <- c()
+  for (i in 1:nh){
+    h <- h.candidate[i]
+    # Integrated square estimation
+    estdensq.kernel <- function(x){estden.kernel(x, data = data, h = h)^2}
+    J1 <- integrate(Vectorize(estdensq.kernel),
+                    lower = -1, upper = 2, subdivisions = 2000)$value
+    # leave-one-out
+    J2 <- 0
+    for (j in 1:n){
+      J2 <- J2 + estden.kernel(data[j], data = data[-j], h = h)
+      }
+    # Empirical risk (6.33)
+    riskseq[i] <- J1 - (2 * J2)/n
+    }
+  return(h.candidate[which.min(riskseq)])
+  }
+
+
+```
+
+
+```{r}
+
+band.normal <-function(data){
+  n <- length(data)
+  s <- sd(data)
+  qdata <- as.vector(quantile(data,probs=c(0.25,0.75)))
+  Q <- qdata[2]-qdata[1]
+  sigma <- min(s, Q/1.34)
+  h <- 1.06*sigma*n^(-1/5)
+  return(h)
+  }
+
+
+```
+
+
+
+
+```{r}
+
+# Density estimation
+x.grid <- seq(from = -4.5, to = 7, by = 0.001)
+
+# Histogram : Cross-Validation
+h.hcv <- band.hcv(data)
+y.grid_Hist <- sapply(x.grid, estden.hist, data = data, h = h.hcv)
+plot(x.grid, y.grid_Hist, type = "l", xlab = "", ylab = "Density Estimate",
+     main = "N(1,4): Histogrm density estimation with cross-validation")
+
+# Kernel: Cross-Validation
+h.kcv <- band.kcv(data)
+y.grid_kernel <- sapply(x.grid, estden.kernel, data = data, h = h.kcv)
+plot(x.grid, y.grid_kernel, type = "l", xlab = "", ylab = "Density Estimate",
+     main = "N(1,4): Kernel density estimation with cross-validation")
+
+# Kernel: Normal reference rule
+h.normal <- band.normal(data)
+y.grid_NRR <- sapply(x.grid, estden.kernel, data = data, h = h.normal)
+plot(x.grid, y.grid_NRR, type = "l", xlab = "", ylab = "Density Estimate",
+     main = "N(1,4): Kernel density estimation with normal reference rule")
+
+# Density Function of N(1,4)
+y.grid_denfunc <- sapply(x.grid,dnorm,mean=1,sd=2)
+plot(x.grid, y.grid_denfunc, type = "l", xlab = "", ylab = "Density",
+     main = "N(1,4):Density Function")
+
+
+```
+
+```{r}
+#Combined Plot
+plot(x.grid, y.grid_Hist, type = "l", xlab = "", ylab = "Density (Estimate)",
+     main = "N(1,4) Sample Density(Estimate)")
+lines(x.grid, y.grid_kernel,col="brown")
+lines(x.grid, y.grid_NRR,col="blue")
+lines(x.grid, y.grid_denfunc,col="orange")
+
+
+```
+
+```{r}
+#The built-in function
+
+plot(density(data),main="Density by the built-in function")
+
+
+```
+
+
+
+\
+\ \ Conclusion:
+\
+\ \ I have plotted a density function of N(1,4), a histogram density estimator, a kernel density estimator, both with cross-validation; and a kernel density estimator with normal reference rule. Eventually, the comparison of the 4 curves are drawn in the same plot.
+\
+\ \ The bandwidth that the built-in function use is 0.6028.
+
+
+
+
+
+
+
+
+
+\
+\ \ Conclusion: The corresponding p-value is 0.464 > 0.1 and we fail to reject the null.
+
+

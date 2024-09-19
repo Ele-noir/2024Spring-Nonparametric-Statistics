@@ -1,0 +1,108 @@
+---
+title: "Homework 2"
+author: "Lizhuo Zhou 20307100132"
+date: "03/21/2024"
+output:
+  pdf_document: default
+  word_document: default
+---
+
+## Problem 1
+\ 
+
+```{r} 
+# D: Kolomogorov-Smirnov One-Sample Statistic
+# n: the number of samples
+# nrep: the number of samples for simulation
+ks_pvalue<-function(D,n,nrep){
+Dn <- c()
+for (i in 1:nrep) {
+x.obs <- rnorm(n,0,1)
+Fn.hat <- ecdf(x.obs)
+Dn[i] <- max(abs(Fn.hat(x.obs) - pnorm(x.obs)))
+}
+return(sum(Dn > D)/nrep)
+}
+
+
+```
+
+
+```{r}
+# Calculate the p-value of the statistics under the problem setting
+
+D = 0.05; n = 100; nrep = 5000
+ks_pvalue(D,n,nrep)
+
+```
+
+\
+\ \ Conclusion: The result shows that the p-value is 0.91>0.05, so that we fail to reject the null hypothesis at level $\alpha=0.05$.
+
+
+## Problem 2
+\ 
+
+```{r}
+set.seed(2)
+d<-rcauchy(50)
+
+emp.inv<-sort(d)
+sel<-seq(1,50,by=1)/50
+norm.inv<-qnorm(sel)
+plot(norm.inv,emp.inv)
+
+abline(0,1,col='red')
+```
+\
+\ \ Conclusion:
+\
+\ \ From above, we could see that the simulation of Cauchy distribution does not perfectly fit a normal distribution. Only the middle part of the plot relatively fits the normal distribution, but the plot's head and tail are far from normally distributed, indicating the simulated data's kurtosis exceeds that of a standard normal distribution.
+
+
+## Problem 3
+\ 
+
+```{r} 
+wilcox.stats <- function(x, med){
+  s <- sign(x-med)
+  s.abs <- abs(x-med)
+  return(sum(rank(s.abs)[s>0])-sum(rank(s.abs)[s<0]))
+}
+
+```
+
+```{r} 
+wilcox.pvalue <- function(x, med, nrep){
+  stats <- wilcox.stats(x, med)
+  record <- c()
+  for (i in 1:nrep){
+    record[i] <- wilcox.stats(rnorm(20), 0)
+  }
+  
+  # Calculate the two-sided p-value
+  return(2*min(mean(record < stats), mean(record > stats)))}
+
+```
+
+```{r}
+# Calculate the p-value of the statistics under the problem setting
+set.seed(20355)
+x <- rnorm(20,mean=0,sd=1); med <- 0.1; nrep <- 50000
+wilcox.pvalue(x, med, nrep)
+
+```
+
+\
+\ \ Conclusion:
+\
+\ \ The corresponding p-value is 0.59152>0.05, and we fail to reject the null at level 0.05.
+
+
+
+
+
+
+
+
+

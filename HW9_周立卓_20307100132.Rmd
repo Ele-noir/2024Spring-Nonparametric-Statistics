@@ -1,0 +1,162 @@
+---
+title: "Homework9"
+author: "Lizhuo Zhou 20307100132"
+date: "05/27/2024"
+output:
+  pdf_document: default
+  word_document: default
+---
+
+## Problem 1
+
+### 1. Risk of MLE
+
+  Given $\theta_{i}=\dfrac{1}{i^2}, Z_{i} \sim N(\theta_{i},1).$
+  
+  The risk of MLE, $\hat{\theta_{i}}=Z_{i}$ is given by 
+  
+  $R(Z^{n},\theta^{n})=\sum_{i=1}^{n}E_{\theta}(Z_{i}-\theta_{i})^{2}=\sum_{i=1}^{n}1=n$
+  
+### 2.Risk of Linear Estimator
+
+  For simplicity, let $Z_{i}=\theta_{i}+\epsilon_{i},$ where $\theta_{i}=\dfrac{1}{i}$ and $\epsilon \sim N(0,1).$
+  
+  Therefore by definition of risk function, we could calculate the square risk as follows:
+  
+  $R(\hat{\theta},\theta)= R(bZ,\theta)=\sum_{i=1}^{1000}E_{\theta}[(bZ_{i}-\theta_{i})^2]=\sum_{i=1}^{1000}E_{\theta}[(b-1)^2\theta_{i}^2+2b(b-1)\theta_{i}\epsilon_{i}+b^2\epsilon^2_{i}]$
+  
+  Thus, $R(\hat{\theta},\theta)=(b-1)^2\sum_{i=1}^{1000}\dfrac{1}{i^4}+2b(b-1)\sum_{i=1}^{1000}\dfrac{1}{i^2}E[\epsilon_{i}]+b^2\sum_{i=1}^{1000}\left(E^2[\epsilon_{i}]+Var(\epsilon_{i})\right)$, where $E[\epsilon_{i}]=0,Var(\epsilon_{i})=1$.
+  
+  Therefore, $R(\hat{\theta},\theta)=(b-1)^2\sum_{i=1}^{1000}\dfrac{1}{i^4}+1000b^2.$
+  
+  The result is consistent with what we get from Stein's theorem. From example 7.20, know that for $\hat{\theta_{i}}=bZ_{i},$
+  
+  $\hat{R(Z)}=(2b-1)n\sigma^2+(1-b)^2\sum_{i=1}^{n}Z^2_{i}$
+  
+  Here for n=1000, $\theta_{i}=\dfrac{1}{i^2}$ and $\sigma^2=1,$
+  
+  $\hat{R(Z)}=(2b-1) \times 1000+(1-b)^2\sum_{i=1}^{1000}Z^2_{i}.$
+  
+  Take expectation, we could show that it is still an unbiased estimator for $R(bZ,\theta):$
+  
+  $E[\hat{R(Z)}]=E\left[(2b-1)n+(1-b)^2\sum_{i=1}^{1000}Z^2_{i}\right]=(2b-1)n+(1-b)^2\sum_{i=1}^{1000}\left(E[Z_{i}]^2+Var(Z_{i})\right)=(2b-1)n+(1-b)^2\sum_{i=1}^{1000}(\dfrac{1}{i^4}+1)=(b-1)^2\sum_{i=1}^{1000}\dfrac{1}{i^4}+(2b-1)n+n(1-b)^2=(b-1)^2\sum_{i=1}^{1000}\dfrac{1}{i^4}+1000b^2$
+  
+### Plot Risk with respect to b.
+  
+```{r}
+
+Risk<-function(b){
+  sum.i<-0
+  risk.b<-c()
+  for(i in 1:1000){
+    sum.i<-sum.i+(1/i^4)
+  }
+  for(j in 1:length(b)){
+    risk.b[j]<-((b[j]-1)^2)*sum.i+1000*(b[j])^2
+  }
+  return(risk.b)
+}
+
+```
+
+The plot $R(bZ,\theta)=(b-1)^2\sum_{i=1}^{1000}\dfrac{1}{i^4}+1000b^2$: 
+
+```{r}
+# Plot Risk w.r.t. b
+b<-seq(0,0.01,0.00001)
+Risk.b<-Risk(b)
+
+plot(b,Risk.b,type="l",main="Risk w.r.t. b")
+
+```
+
+### 4. Derive the optimal b
+
+\
+\ \ Take derivative w.r.t. b, then let it equal to 0:
+
+$\dfrac{\partial R(bZ,\theta)}{\partial b}=\dfrac{\partial\left[(b-1)^2\sum_{i=1}^{1000}\dfrac{1}{i^4}+1000b^2\right]}{\partial b}=2(b-1)\sum_{i=1}^{1000}\dfrac{1}{i^4}+2000b=0$
+
+Solve for $b^*$: $b^*=\dfrac{\sum_{i=1}^{1000}\dfrac{1}{i^4}}{1000+\sum_{i=1}^{1000}\dfrac{1}{i^4}}$
+
+```{r}
+sum.i_b_star<-0
+for(i in 1:1000){
+  sum.i_b_star<-sum.i_b_star+1/i^4
+  
+}
+
+b_star<-sum.i_b_star/(1000+sum.i_b_star)
+print(b_star)
+```
+
+\
+\ \ $b^* \approx 0.001081153$
+
+### 5. Simulation
+
+Define $\theta^{n}$
+
+```{r}
+
+n<-1000
+i<-1:n
+theta<-i^(-2)
+
+# Simulate for 100,000 times.
+# Note that James-Stein estimator is not unbiased.
+
+b_hat_record <- c()
+for (t in 1:100000){
+  Z <- theta + rnorm(n)
+  b_hat <- max(0, 1 - n/sum(Z^2))
+  b_hat_record[t] <- b_hat
+}
+
+hist(b_hat_record, breaks = 20, probability = T, main = "James-Stein Estimator", xlab = "")
+abline(v = 0.001081153, lty = 2)
+```
+\
+\ \ The risk of MLE and linear estimator have been calculated previously.
+\
+\ \ Now we compare the risk of James-Stein estimator with that of MLE. Next, we compare
+the risk of these two estimators with Pinsker bound.
+
+
+
+```{r}
+
+i<-1:1000
+sum_quartic<-sum(i^(-4))
+risk_record<-sum_quartic*(b_hat_record-1)^2+1000*b_hat_record^2
+summary(risk_record)
+
+```
+
+```{r}
+hist(risk_record,breaks=20,probability=T,main="James-Stein Estimator Risk",xlab="")
+```
+\
+\ \ Clearly, James-Stein estimator achieves much lower risk than MLE. For Pinsker bound, we have $\sigma^2=n\sigma_{n}^2=1000.$ If $\Theta_{n}(c)=\left\{(\theta_{1},...,\theta_{n}):\sum_{i=1}^{n}\theta^{2}_{i} \leq c^2 \right\}$, the Pinsker bound is then given by $\dfrac{\sigma^2c^2}{\sigma^2+c^2}=\dfrac{1000c^2}{1000+c^2}.$
+
+\
+\ \ The question in concern is how to choose $c^2.$ We have calculated that $\sum_{i=1}^{1000}\dfrac{1}{i^4} \approx 1.082323.$ Also, note that $lim_{n \rightarrow \infty}\sum_{i=1}^{n}\dfrac{1}{i^4}=\dfrac{\pi^4}{90}\approx 1.082323.$
+\
+\ \ Let $c^2=\dfrac{\pi^4}{90},$ plug in the Pinsker bound:
+
+```{r}
+squared_c<-pi^4/90
+Pinsker<-(1000*squared_c)/(1000+squared_c)
+print(paste("The Pinsker bound is",Pinsker))
+
+cat(paste("The quartiles of James-Stein estimator is","\n",paste(quantile(risk_record),collapse=",")))
+
+```
+
+\
+\ \ From the above, we could see that the minimum simulated risk of James-Stein estimator almost matches Pinsker bound.
+
+
+
+
+

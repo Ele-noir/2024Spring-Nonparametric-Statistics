@@ -1,0 +1,52 @@
+---
+title: "Homework 3"
+author: "Lizhuo Zhou 20307100132"
+date: "03/28/2024"
+output:
+  pdf_document: default
+  word_document: default
+---
+
+### 1.4
+\ 
+
+```{r 1} 
+# Preparation
+# Functions-Calculate the Mood's median statistics and p-value
+# nrep: the number of samples for simulation
+
+mood.stats <- function(X,Y){
+  X <- sort(X); Y <- sort(Y)
+  XY <- sort(c(X,Y))
+  rank.X <- match(X, XY)
+  return(sum((rank.X-length(XY)+1)/2)^2)
+  }
+
+moods.pvalue <- function(X,Y,nrep){
+  # Calculate the Mood test statistics
+  n <- length(X)
+  stats <- mood.stats(X, Y)
+  # Simulate under the null
+  mood.sim <- c()
+  for (i in 1:nrep) {
+    mood.sim[i] <- mood.stats(rnorm(n,0,1), rnorm(n,0,1))
+    }
+  return(2*min(mean(mood.sim < stats), mean(mood.sim> stats)))
+  }
+
+
+```
+
+
+```{r 2}
+# Calculate the p-value of the statistics under the problem setting
+set.seed(217)
+X = rnorm(1000); Y = rt(1000,10); nrep = 5000
+moods.pvalue(X,Y,nrep)
+
+```
+\
+\ \ Conclusion:
+\
+\ \ For problem 1.4, the p-value is 0.506 and we fail to reject the null hypothesis using Mood's Median Test at level $\alpha=0.05$
+
